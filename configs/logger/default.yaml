@@ -1,0 +1,4 @@
+type: tensorboard
+save_dir: lightning_logs
+experiment_name: experiment
+version: ~ # specify which version, should be number or string

@@ -1,0 +1,14 @@
+# @package _global_
+
+# specify here default training configuration
+defaults:
+  - _self_
+  - datamodule: fvr_datamodule.yaml
+  - litmodel: fvr_litmodel.yaml
+  - trainer: default.yaml
+  - callbacks: default.yaml
+  - logger: default.yaml
+
+  # experiment configs allow for version control of specific configurations
+  # e.g. best hyperparameters for each combination of model and datamodule
+  - experiment: ~
