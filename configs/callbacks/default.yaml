@@ -8,3 +8,4 @@ model_checkpoint:
   mode: "max"
   save_last: True
   auto_insert_metric_name: False
+  every_n_epochs: 1

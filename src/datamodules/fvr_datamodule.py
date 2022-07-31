@@ -10,6 +10,8 @@ class FVRDatamodule(pl.LightningDataModule):
     def __init__(self,
                  data_dir: str = 'data/',
                  train_batch_size: int = 2,
+                 train_batch_sampler_n_classes: int = 8,
+                 train_batch_sampler_n_samples: int = 4,
                  val_batch_size: int = 1,
                  test_batch_size: int = 1,
                  num_workers: int = 0,
@@ -52,7 +54,10 @@ class FVRDatamodule(pl.LightningDataModule):
             inter_aug='')
         self.data_test = self.data_val
 
-        self.train_batch_sampler = BalancedBatchSampler(self.data_train, n_classes=8, n_samples=4)
+        self.train_batch_sampler = BalancedBatchSampler(
+            self.data_train,
+            n_classes=self.hparams.train_batch_sampler_n_classes,
+            n_samples=self.hparams.train_batch_sampler_n_samples)
 
     def train_dataloader(self):
         return DataLoader(

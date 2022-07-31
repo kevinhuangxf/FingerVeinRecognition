@@ -75,8 +75,9 @@ class BalancedBatchSampler(torch.utils.data.BatchSampler):
     Returns batches of size n_classes * n_samples
     """
 
-    def __init__(self, dataset, n_classes, n_samples):
+    def __init__(self, dataset, n_classes, n_samples, drop_last=False):
         self.labels = np.array(dataset.labels)
+        self.drop_last = drop_last
 
         self.labels_set = list(set(self.labels))
         self.label_to_indices = {

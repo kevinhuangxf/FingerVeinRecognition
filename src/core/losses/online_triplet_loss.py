@@ -13,7 +13,7 @@ class OnlineTripletLoss(nn.Module):
     indices of triplets
     """
 
-    def __init__(self, margin=0.2, s=20.0, is_distance=True):
+    def __init__(self, margin=0.2, s=20.0, is_distance=True, loss_weight=1.0):
         super(OnlineTripletLoss, self).__init__()
         self.margin = margin
         self.triplet_selector = RandomNegativeTripletSelector(
@@ -21,6 +21,7 @@ class OnlineTripletLoss(nn.Module):
         self.is_distance = is_distance
         self.s = s
         self.iter = 0
+        self.loss_weight = loss_weight
 
     def forward(self, embeddings, target):
         embeddings_normalized = F.normalize(embeddings, p=2, dim=1)
@@ -53,4 +54,4 @@ class OnlineTripletLoss(nn.Module):
             losses = torch.log(1 + torch.exp(self.s * (an_distances - ap_distances + self.margin)))
             # losses = 2*F.relu(an_distances - ap_distances + self.margin)
         self.iter += 1
-        return losses.mean(), len(triplets)
+        return losses.mean() * self.loss_weight, len(triplets)

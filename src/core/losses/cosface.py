@@ -5,17 +5,18 @@ import torch.nn.functional as F
 
 class CosFace(nn.Module):
 
-    def __init__(self, s=20.0, m=0.2, verbal=False):
+    def __init__(self, s=20.0, m=0.2, verbal=False, loss_weight=1.0):
         super(CosFace, self).__init__()
         self.s = s
         self.m = m
         self.iter = 0
         self.verbal = verbal
+        self.loss_weight = loss_weight
 
     def forward(self, input, labels):
         # input: size = B x num_class
         cos = input
-        one_hot = torch.zeros(cos.size())
+        one_hot = torch.zeros(cos.size()).type_as(input)
         one_hot = one_hot.scatter_(1, labels.view(-1, 1), 1)
         output = self.s * (cos - one_hot * self.m)
 
@@ -38,4 +39,4 @@ class CosFace(nn.Module):
                   (angles_target_mean, angles_target_min, angles_target_max, angles_non_target_mean,
                    angles_non_target_min, angles_non_target_max))
         self.iter += 1
-        return loss
+        return loss * self.loss_weight
