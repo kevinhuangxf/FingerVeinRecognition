@@ -2,6 +2,7 @@ _target_: src.litmodels.FVRLitModel
 
 backbone:
   _target_: src.networks.backbones.resnet18
+  pretrained: True
 
 head:
   _target_: src.networks.heads.NormLinearHead
@@ -23,7 +24,17 @@ losses:
     loss_weight: 4.0
 
 optimizer:
-  _target_: torch.optim.Adam
-  _partial_: true
-  lr: 0.001
+  type: SGD
+  lr: 0.01
   weight_decay: 0.0
+
+# optimizer:
+#   type: Adam
+#   lr: !!float 1e-4
+#   weight_decay: 0.0
+#   betas: [0.9, 0.99]
+
+lr_scheduler:
+  type: MultiStepLR
+  milestones: [60]
+  gamma: 0.1
