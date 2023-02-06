@@ -1,0 +1,83 @@
+_target_: src.litmodels.MRAALitModel
+
+region_predictor:
+  _target_: src.networks.mraa.RegionPredictor
+  block_expansion: 32 
+  num_regions: 10
+  num_channels: 3 
+  max_features: 1024
+  num_blocks: 5
+  temperature: 0.1 
+  estimate_affine: False 
+  scale_factor: 1
+  pca_based: False 
+  fast_svd: False 
+  pad: 3
+
+bg_predictor: 
+  _target_: src.networks.mraa.BGMotionPredictor
+  block_expansion: 32 
+  num_channels: 3
+  max_features: 1024 
+  num_blocks: 5
+  bg_type: zero
+
+generator: 
+  _target_: src.networks.mraa.Generator
+  num_channels: 3
+  num_regions: 10
+  block_expansion: 64 
+  max_features: 512
+  num_down_blocks: 2
+  num_bottleneck_blocks: 6 
+  pixelwise_flow_predictor_params: ~
+  skips: True
+  revert_axis_swap: True
+
+train_params:
+  num_epochs: 50 # 100
+  num_repeats: 25 # 50
+  epoch_milestones: [60, 90]
+  lr: 2.0e-4
+  batch_sizeL: 32
+  dataloader_workers: 6
+  checkpoint_freq: 5 # 50
+  scales: [1, 0.5, 0.25, 0.125]
+  transform_params: 
+    sigma_affine: 0.05
+    sigma_tps: 0.005
+    points_tps: 5
+  loss_weights:
+    perceptual: [10, 10, 10, 10, 10]
+    equivariance_shift: 10
+    equivariance_affine: 10
+
+losses:
+  cosface:
+    _target_: src.core.losses.CosFace
+    s: 20.0
+    m: 0.2
+    verbal: False
+    loss_weight: 1.0
+  tripletloss:
+    _target_: src.core.losses.OnlineTripletLoss
+    margin: 0.2
+    s: 20.0
+    is_distance: True
+    loss_weight: 4.0
+
+optimizer:
+  type: SGD
+  lr: 0.01
+  weight_decay: 0.0
+
+# optimizer:
+#   type: Adam
+#   lr: !!float 1e-4
+#   weight_decay: 0.0
+#   betas: [0.9, 0.99]
+
+lr_scheduler:
+  type: MultiStepLR
+  milestones: [60]
+  gamma: 0.1

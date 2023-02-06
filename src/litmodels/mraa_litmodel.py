@@ -8,13 +8,16 @@ from sklearn.metrics import roc_curve
 from src.core.solvers.helper import get_lr_scheduler, get_optimizer
 
 
-class FVRLitModel(LightningModule):
+class MRAALitModel(LightningModule):
 
-    def __init__(self, backbone, head, losses=None, optimizer=None, lr_scheduler=None):
+    def __init__(self, region_predictor, bg_predictor, generator, train_params, losses=None, optimizer=None, lr_scheduler=None):
         super().__init__()
-        self.backbone = backbone
-        self.head = head
-        self.save_hyperparameters(ignore=['backbone', 'head'])
+        self.region_predictor = region_predictor
+        self.bg_predictor = bg_predictor
+        self.generator = generator
+        self.train_params = train_params
+
+        self.save_hyperparameters(ignore=['region_predictor', 'bg_predictor', 'generator'])
 
     def forward(self, x):
         x = self.backbone(x)

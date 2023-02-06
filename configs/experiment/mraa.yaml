@@ -1,0 +1,20 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+defaults:
+  - override /datamodule: fvr_datamodule.yaml
+  - override /litmodel: mraa_litmodel.yaml
+  - override /callbacks: default.yaml
+  - override /trainer: gpu.yaml
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+trainer:
+  min_epochs: 10
+  max_epochs: 100
+  max_steps: -1
+  log_every_n_steps: 100
+  num_sanity_val_steps: 0
