@@ -32,6 +32,14 @@ class FVUSMDataset(Dataset):
                     img.close()
             # self.img_data = [Image.open(os.path.join(root, self.files[i]))
             # for i in np.arange(0, len(self.files) // 2)]
+
+            # stylegan trainset from 0 - 1475
+            # stylegan_files = sorted(glob.glob(os.path.join(root, "../stylegan") + '/*.*'))
+            # for i in np.arange(0, len(stylegan_files) // 2):
+            #     with open(os.path.join(root, "../stylegan", stylegan_files[i]), 'rb') as f:
+            #         img = Image.open(f)
+            #         self.img_data.append(img.copy())
+            #         img.close()
         elif mode == 'test':
             # trainset from 2952 - 5903
             for i in np.arange(len(self.files) // 2, len(self.files)):
