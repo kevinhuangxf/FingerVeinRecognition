@@ -1,3 +1,4 @@
+import os.path as osp
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 from torchvision import transforms
@@ -20,8 +21,8 @@ class MRAADatamodule(pl.LightningDataModule):
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
 
-        frame_dataset = FramesDataset(
-            root_dir = data_dir,
+        train_dataset = FramesDataset(
+            root_dir = osp.join(data_dir, 'train'),
             frame_shape = (256, 256, 3),
             id_sampling = False,
             is_train = True,
@@ -30,9 +31,29 @@ class MRAADatamodule(pl.LightningDataModule):
             # augmentation_params: Any
         )
 
-        self.data_train = frame_dataset
-        self.data_val = frame_dataset
-        self.data_test = frame_dataset
+        val_dataset = FramesDataset(
+            root_dir = osp.join(data_dir, 'test'),
+            frame_shape = (256, 256, 3),
+            id_sampling = False,
+            is_train = True,
+            random_seed = 0,
+            pairs_list = None,
+            # augmentation_params: Any
+        )
+
+        test_dataset = FramesDataset(
+            root_dir = osp.join(data_dir, 'test'),
+            frame_shape = (256, 256, 3),
+            id_sampling = False,
+            is_train = False,
+            random_seed = 0,
+            pairs_list = None,
+            # augmentation_params: Any
+        )
+
+        self.data_train = train_dataset
+        self.data_val = val_dataset
+        self.data_test = test_dataset
 
     def train_dataloader(self):
         return DataLoader(

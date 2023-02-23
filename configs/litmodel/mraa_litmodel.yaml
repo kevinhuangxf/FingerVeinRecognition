@@ -47,7 +47,7 @@ train_params:
     sigma_tps: 0.005
     points_tps: 5
   loss_weights:
-    perceptual: [10, 10, 10, 10, 10]
+    perceptual: 10 # [10, 10, 10, 10, 10]
     equivariance_shift: 10
     equivariance_affine: 10
 
@@ -55,14 +55,6 @@ train_params:
 # losses:
 #   perceptual_loss:
 #     _target_: src.core.losses.PerceptualLoss
-#     layer_weights:
-#       'conv5_4': 1  # before relu
-#     vgg_type: vgg19
-#     use_input_norm: true
-#     range_norm: false
-#     perceptual_weight: 1.0
-#     style_weight: 0
-#     criterion: l1
 
 optimizer:
   type: Adam
@@ -72,5 +64,5 @@ optimizer:
 
 lr_scheduler:
   type: MultiStepLR
-  milestones: [60, 90] # [60, 90]
+  milestones: [60, 90]
   gamma: 0.1

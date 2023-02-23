@@ -1,10 +1,16 @@
+import os
+import cv2
+import numpy as np
+from collections import OrderedDict
+
 import torch
-import lpips
 from pytorch_lightning import LightningModule
 from torchmetrics.functional import peak_signal_noise_ratio as psnr
 from torchmetrics.functional import structural_similarity_index_measure as ssim
 
+from src.utils.common import tensor2img
 from src.core.solvers.helper import get_lr_scheduler, get_optimizer
+from src.core.losses import PerceptualLoss
 from src.networks.mraa.model import Transform
 
 
@@ -16,10 +22,9 @@ class MRAALitModel(LightningModule):
         self.bg_predictor = bg_predictor
         self.generator = generator
         self.train_params = train_params
-        # self.losses = losses
+        self.perceptual_loss = PerceptualLoss()
 
         self.loss_weights = train_params['loss_weights']
-        self.loss_lpips = lpips.LPIPS(net='vgg')
         self.save_hyperparameters(ignore=['region_predictor', 'bg_predictor', 'generator'])
 
     def forward(self, x):
@@ -33,9 +38,7 @@ class MRAALitModel(LightningModule):
 
         return generated
 
-    def training_step(self, batch, batch_idx):
-        x = batch
-
+    def shared_step(self, x):
         source_region_params = self.region_predictor(x['source'])
         driving_region_params = self.region_predictor(x['driving'])
 
@@ -47,8 +50,7 @@ class MRAALitModel(LightningModule):
         loss_values = {}
 
         # perceptual loss
-        # loss_values['perceptual'] = self.loss_lpips(x['driving'], generated['prediction']).mean()
-        # loss_values['perceptual'] = self.losses.perceptual_loss(x['driving'], generated['prediction'])[0]
+        loss_values['perceptual'] = self.loss_weights['perceptual'] * self.perceptual_loss(x['driving'], generated['prediction'])[0]
 
         # equivariance losses
         if (self.loss_weights['equivariance_shift'] + self.loss_weights['equivariance_affine']) != 0:
@@ -81,33 +83,113 @@ class MRAALitModel(LightningModule):
 
         loss_values['loss'] = sum([v for k, v in loss_values.items()])
 
+        return generated, loss_values
+
+    def training_step(self, batch, batch_idx):
+        generated, loss_values = self.shared_step(batch)
+
         # logging
-        self.log_dict(loss_values)
-        # self.trainer.logger.experiment.log(loss_values)
-        # if self.global_step % 100 == 0:
-        #     self.trainer.logger.log_image(
-        #         key="Images", 
-        #         images=[x['driving'], generated['prediction']], 
-        #         caption=["driving", "prediction"]
-        #     )
+        self.log_dict({'(train)' + k: v for k, v in loss_values.items()},
+                      on_step=True,
+                      on_epoch=False,
+                      prog_bar=False)
 
         return loss_values
 
     def validation_step(self, batch, batch_idx):
         x = batch
+        # generated, loss_dict = self.shared_step(x)
         generated = self.forward(x)
+
+        transform = Transform(x['driving'].shape[0], **self.train_params['transform_params'])
+        transformed_frame = transform.transform_frame(x['driving'])
+        transformed_region_params = self.region_predictor(transformed_frame)
+
+        generated['transformed_frame'] = transformed_frame
+        generated['transformed_region_params'] = transformed_region_params
 
         loss_dict = {}
         loss_dict['PSNR'] = psnr(x['driving'], generated['prediction'])
         loss_dict['SSIM'] = ssim(x['driving'], generated['prediction'])
 
-        self.log_dict(loss_dict)
+        # # Equivariance visualization
+
+        self.trainer.logger.experiment.add_images(
+            "driving",
+            x['driving'], 
+            self.global_step
+        )
+        self.trainer.logger.experiment.add_images(
+            "prediction",
+            generated["prediction"], 
+            self.global_step
+        )
+        self.trainer.logger.experiment.add_images(
+            "transformed_frame",
+            generated["transformed_frame"], 
+            self.global_step
+        )
+        #     self.trainer.logger.log_image(
+        #         key="Images", 
+        #         images=[x['driving'], generated['prediction'], transformed_frame], 
+        #         caption=["driving", "prediction", "transformed_frame"]
+        #     )
 
         return loss_dict
 
+    def evaluation_step(self, outputs):
+        results = OrderedDict()
+
+        if 'loss' in outputs[0]:
+            results['loss'] = torch.mean(torch.stack(
+                [output['loss'] for output in outputs]),
+                                         dim=0)
+        if 'PSNR' in outputs[0]:
+            results['PSNR'] = torch.mean(torch.stack(
+                [output['PSNR'] for output in outputs]),
+                                         dim=0)
+        if 'SSIM' in outputs[0]:
+            results['SSIM'] = torch.mean(torch.stack(
+                [output['SSIM'] for output in outputs]),
+                                         dim=0)
+
+        return results
+    
+    def validation_epoch_end(self, outputs):
+        results = self.evaluation_step(outputs)
+        self.log_dict({'(val)' + k: v for k, v in results.items()})
+
     def test_step(self, batch, batch_idx):
-        generated = self.forward(batch)
-        return generated
+        x = batch
+
+        predictions = []
+        source_region_params = self.region_predictor(x['video'][:, 0])
+        for frame_idx in range(x['video'].shape[1]):
+            source = x['video'][:, 0]
+            driving = x['video'][:, frame_idx]
+            driving_region_params = self.region_predictor(driving)
+
+            bg_params = self.bg_predictor(source, driving)
+            out = self.generator(source, source_region_params=source_region_params,
+                            driving_region_params=driving_region_params, bg_params=bg_params)
+
+            out['source_region_params'] = source_region_params
+            out['driving_region_params'] = driving_region_params
+
+            predictions.append(np.transpose(out['prediction'].data.cpu().numpy(), [0, 2, 3, 1])[0])
+        
+        predictions = np.concatenate(predictions, axis=1)
+        # imageio.imsave(os.path.join(png_dir, x['name'][0] + '.png'), (255 * predictions).astype(np.uint8))
+
+        # comp_img = tensor2img(predictions)
+        comp_img = (255 * predictions).astype(np.uint8)
+        comp_img_name = f'predictions_{batch_idx}.png'
+        comp_img_dir = os.path.join(self.logger.log_dir, 'results')
+        comp_img_path = os.path.join(comp_img_dir, comp_img_name)
+        os.makedirs(comp_img_dir, exist_ok=True)
+        cv2.imwrite(comp_img_path, cv2.cvtColor(comp_img, cv2.COLOR_RGB2BGR))
+
+        return predictions
 
     def configure_optimizers(self):
         optimizer = get_optimizer([

@@ -27,7 +27,7 @@ class PerceptualLoss(nn.Module):
         criterion (str): Criterion used for perceptual loss. Default: 'l1'.
     """
     def __init__(self,
-                 layer_weights,
+                 layer_weights={"conv5_4": 1},
                  vgg_type='vgg19',
                  use_input_norm=True,
                  range_norm=False,
