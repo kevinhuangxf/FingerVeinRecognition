@@ -5,14 +5,16 @@ from collections import OrderedDict
 
 import torch
 from pytorch_lightning import LightningModule
+from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from torchmetrics.functional import peak_signal_noise_ratio as psnr
 from torchmetrics.functional import structural_similarity_index_measure as ssim
 
-from src.utils.common import tensor2img
+# from src.utils.common import tensor2img
 from src.core.solvers.helper import get_lr_scheduler, get_optimizer
 from src.core.losses import PerceptualLoss
-from src.networks.mraa.model import Transform
+from src.networks.mraa.model import Transform, ImagePyramide, Vgg19
 
+import wandb
 
 class MRAALitModel(LightningModule):
 
@@ -25,7 +27,13 @@ class MRAALitModel(LightningModule):
         self.perceptual_loss = PerceptualLoss()
 
         self.loss_weights = train_params['loss_weights']
+
+        self.scales = train_params['scales']
+        self.pyramid = ImagePyramide(self.scales, 3)
+        self.vgg = Vgg19()
+
         self.save_hyperparameters(ignore=['region_predictor', 'bg_predictor', 'generator'])
+
 
     def forward(self, x):
         source_region_params = self.region_predictor(x['source'])
@@ -50,7 +58,19 @@ class MRAALitModel(LightningModule):
         loss_values = {}
 
         # perceptual loss
-        loss_values['perceptual'] = self.loss_weights['perceptual'] * self.perceptual_loss(x['driving'], generated['prediction'])[0]
+        if sum(self.loss_weights['perceptual']) != 0:
+            pyramide_real = self.pyramid(x['driving'])
+            pyramide_generated = self.pyramid(generated['prediction'])
+
+            value_total = 0
+            for scale in self.scales:
+                x_vgg = self.vgg(pyramide_generated['prediction_' + str(scale)])
+                y_vgg = self.vgg(pyramide_real['prediction_' + str(scale)])
+
+                for i, weight in enumerate(self.loss_weights['perceptual']):
+                    value = torch.abs(x_vgg[i] - y_vgg[i].detach()).mean()
+                    value_total += self.loss_weights['perceptual'][i] * value
+                loss_values['perceptual'] = value_total
 
         # equivariance losses
         if (self.loss_weights['equivariance_shift'] + self.loss_weights['equivariance_affine']) != 0:
@@ -93,47 +113,67 @@ class MRAALitModel(LightningModule):
                       on_step=True,
                       on_epoch=False,
                       prog_bar=False)
-
+        
         return loss_values
 
     def validation_step(self, batch, batch_idx):
         x = batch
-        # generated, loss_dict = self.shared_step(x)
-        generated = self.forward(x)
-
-        transform = Transform(x['driving'].shape[0], **self.train_params['transform_params'])
-        transformed_frame = transform.transform_frame(x['driving'])
-        transformed_region_params = self.region_predictor(transformed_frame)
-
-        generated['transformed_frame'] = transformed_frame
-        generated['transformed_region_params'] = transformed_region_params
-
         loss_dict = {}
-        loss_dict['PSNR'] = psnr(x['driving'], generated['prediction'])
-        loss_dict['SSIM'] = ssim(x['driving'], generated['prediction'])
 
-        # # Equivariance visualization
+        drivings = []
+        predictions = []
+        source_region_params = self.region_predictor(x['video'][:, 0])
+        for frame_idx in range(x['video'].shape[1]):
+            source = x['video'][:, 0]
+            driving = x['video'][:, frame_idx]
+            driving_region_params = self.region_predictor(driving)
+            drivings.append(driving)
 
-        self.trainer.logger.experiment.add_images(
-            "driving",
-            x['driving'], 
-            self.global_step
-        )
-        self.trainer.logger.experiment.add_images(
-            "prediction",
-            generated["prediction"], 
-            self.global_step
-        )
-        self.trainer.logger.experiment.add_images(
-            "transformed_frame",
-            generated["transformed_frame"], 
-            self.global_step
-        )
-        #     self.trainer.logger.log_image(
-        #         key="Images", 
-        #         images=[x['driving'], generated['prediction'], transformed_frame], 
-        #         caption=["driving", "prediction", "transformed_frame"]
-        #     )
+            bg_params = self.bg_predictor(source, driving)
+            out = self.generator(source, source_region_params=source_region_params,
+                            driving_region_params=driving_region_params, bg_params=bg_params)
+
+            out['source_region_params'] = source_region_params
+            out['driving_region_params'] = driving_region_params
+            predictions.append(out['prediction'])
+
+        t_driv = torch.cat(drivings, 0).unsqueeze(0)
+        t_pred = torch.cat(predictions, 0).unsqueeze(0)
+        vis = torch.cat((t_driv, t_pred), dim=3)
+
+
+        each_val_epoch_steps = len(self.trainer.datamodule.data_val) \
+                               // self.trainer.datamodule.hparams.val_batch_size + 1
+        val_global_step = self.current_epoch * each_val_epoch_steps + batch_idx
+
+        if isinstance(self.trainer.logger, TensorBoardLogger):
+            # self.trainer.logger.experiment.add_images(
+            #     "driving",
+            #     x['driving'], 
+            #     self.global_step
+            # )
+            self.trainer.logger.experiment.add_video(
+                'drivings / predictions', vis, val_global_step
+            )
+        elif isinstance(self.trainer.logger, WandbLogger):
+            # self.trainer.logger.log_image(
+            #     key="Images", 
+            #     images=[x['driving'], generated['prediction'], transformed_frame], 
+            #     caption=["driving", "prediction", "transformed_frame"]
+            # )
+            self.trainer.logger.experiment.log(
+                {"video": wandb.Video((vis[0].cpu().numpy() * 255).astype(np.uint8), fps=4, format="gif")}
+            )
+
+        # transform = Transform(x['driving'].shape[0], **self.train_params['transform_params'])
+        # transformed_frame = transform.transform_frame(x['driving'])
+        # transformed_region_params = self.region_predictor(transformed_frame)
+
+        # generated['transformed_frame'] = transformed_frame
+        # generated['transformed_region_params'] = transformed_region_params
+
+        # loss_dict['PSNR'] = psnr(x['driving'], generated['prediction'])
+        # loss_dict['SSIM'] = ssim(x['driving'], generated['prediction'])
 
         return loss_dict
 
@@ -162,10 +202,10 @@ class MRAALitModel(LightningModule):
     def test_step(self, batch, batch_idx):
         x = batch
 
+        source = x['source']
         predictions = []
-        source_region_params = self.region_predictor(x['video'][:, 0])
+        source_region_params = self.region_predictor(source)
         for frame_idx in range(x['video'].shape[1]):
-            source = x['video'][:, 0]
             driving = x['video'][:, frame_idx]
             driving_region_params = self.region_predictor(driving)
 
@@ -175,21 +215,31 @@ class MRAALitModel(LightningModule):
 
             out['source_region_params'] = source_region_params
             out['driving_region_params'] = driving_region_params
+            predictions.append(out['prediction'])
 
-            predictions.append(np.transpose(out['prediction'].data.cpu().numpy(), [0, 2, 3, 1])[0])
-        
-        predictions = np.concatenate(predictions, axis=1)
-        # imageio.imsave(os.path.join(png_dir, x['name'][0] + '.png'), (255 * predictions).astype(np.uint8))
+        t_pred = torch.cat(predictions, 0).unsqueeze(0)
+        vis = torch.cat((x['video'], t_pred), dim=3)
 
-        # comp_img = tensor2img(predictions)
-        comp_img = (255 * predictions).astype(np.uint8)
-        comp_img_name = f'predictions_{batch_idx}.png'
-        comp_img_dir = os.path.join(self.logger.log_dir, 'results')
-        comp_img_path = os.path.join(comp_img_dir, comp_img_name)
-        os.makedirs(comp_img_dir, exist_ok=True)
-        cv2.imwrite(comp_img_path, cv2.cvtColor(comp_img, cv2.COLOR_RGB2BGR))
+        if isinstance(self.trainer.logger, TensorBoardLogger):
+            # self.trainer.logger.experiment.add_images(
+            #     "driving",
+            #     x['driving'], 
+            #     self.global_step
+            # )
+            self.trainer.logger.experiment.add_video(
+                'drivings / predictions', vis, batch_idx
+            )
+        elif isinstance(self.trainer.logger, WandbLogger):
+            # self.trainer.logger.log_image(
+            #     key="Images", 
+            #     images=[x['driving'], generated['prediction'], transformed_frame], 
+            #     caption=["driving", "prediction", "transformed_frame"]
+            # )
+            self.trainer.logger.experiment.log(
+                {"video": wandb.Video((vis[0].cpu().numpy() * 255).astype(np.uint8), fps=4, format="gif")}
+            )
 
-        return predictions
+        return vis
 
     def configure_optimizers(self):
         optimizer = get_optimizer([

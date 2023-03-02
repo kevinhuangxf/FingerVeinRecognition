@@ -42,12 +42,13 @@ generator:
     estimate_occlusion_map: True
 
 train_params:
+  scales: [1, 0.5, 0.25, 0.125]
   transform_params: 
     sigma_affine: 0.05
     sigma_tps: 0.005
     points_tps: 5
   loss_weights:
-    perceptual: 10 # [10, 10, 10, 10, 10]
+    perceptual: [10, 10, 10, 10, 10]
     equivariance_shift: 10
     equivariance_affine: 10
 

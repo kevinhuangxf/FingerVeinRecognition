@@ -3,13 +3,14 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
-from src.datasets.frames_dataset import FramesDataset
+from src.datasets.fvusm_frames_dataset import FVUSMFramesDataset
 
 
 class MRAADatamodule(pl.LightningDataModule):
 
     def __init__(self,
                  data_dir: str = 'data/',
+                 infer_dir: str = '',
                  train_batch_size: int = 2,
                  val_batch_size: int = 1,
                  test_batch_size: int = 1,
@@ -21,35 +22,9 @@ class MRAADatamodule(pl.LightningDataModule):
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
 
-        train_dataset = FramesDataset(
-            root_dir = osp.join(data_dir, 'train'),
-            frame_shape = (256, 256, 3),
-            id_sampling = False,
-            is_train = True,
-            random_seed = 0,
-            pairs_list = None,
-            # augmentation_params: Any
-        )
-
-        val_dataset = FramesDataset(
-            root_dir = osp.join(data_dir, 'test'),
-            frame_shape = (256, 256, 3),
-            id_sampling = False,
-            is_train = True,
-            random_seed = 0,
-            pairs_list = None,
-            # augmentation_params: Any
-        )
-
-        test_dataset = FramesDataset(
-            root_dir = osp.join(data_dir, 'test'),
-            frame_shape = (256, 256, 3),
-            id_sampling = False,
-            is_train = False,
-            random_seed = 0,
-            pairs_list = None,
-            # augmentation_params: Any
-        )
+        train_dataset = FVUSMFramesDataset(osp.join(data_dir, 'train'), mode='train')
+        val_dataset = FVUSMFramesDataset(osp.join(data_dir, 'test'), mode='test')
+        test_dataset = FVUSMFramesDataset(osp.join(data_dir, 'test'), mode='test', infer_dir=infer_dir)
 
         self.data_train = train_dataset
         self.data_val = val_dataset

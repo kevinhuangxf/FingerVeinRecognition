@@ -1,6 +1,7 @@
 _target_: src.datamodules.MRAADatamodule
-data_dir: /data/kevinhuang/github/articulated-animation/data/FVUSM_256x256_gif
-train_batch_size: 8
+data_dir: /media/user/Kevin/Development/FingerVeinRecognition/data/FVUSM_256x256_train_test # /media/user/Toshiba4T/Kevin/Data/FVUSM/FVUSM_256x256_gif
+infer_dir: /media/user/Kevin/Development/FingerVeinRecognition/data/cherrypicks
+train_batch_size: 16
 val_batch_size: 1
 test_batch_size: 1
 num_workers: 8
