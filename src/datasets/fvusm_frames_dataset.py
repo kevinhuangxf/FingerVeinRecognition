@@ -26,15 +26,18 @@ class FVUSMFramesDataset(Dataset):
         self.img_data = []
         for file_name in self.files:
             img = cv2.imread(file_name.as_posix())
+            img = cv2.resize(img, (256, 256))
             self.img_data.append(img)
         
         # infer data
         self.infer_data = []
-        self.infer_files = sorted(list(Path(infer_dir).rglob("*.png")))
-        for infer_file in self.infer_files:
-            img = cv2.imread(infer_file.as_posix())
-            img = cv2.resize(img, (256, 256))
-            self.infer_data.append(img)
+        self.infer_files = []
+        if infer_dir:
+            self.infer_files = sorted(list(Path(infer_dir).rglob("*.png")))
+            for infer_file in self.infer_files:
+                img = cv2.imread(infer_file.as_posix())
+                img = cv2.resize(img, (256, 256))
+                self.infer_data.append(img)
 
     def __getitem__(self, index):
         out = {}
@@ -58,7 +61,7 @@ class FVUSMFramesDataset(Dataset):
             out['driving'] = driving
 
         if self.mode == 'test':
-            if self.infer_data is not None:
+            if len(self.infer_data) != 0:
                 # set source
                 source = self.infer_data[index]
                 out['source'] = (source.transpose(2, 0, 1) / 255.).astype(np.float32)
@@ -78,7 +81,7 @@ class FVUSMFramesDataset(Dataset):
         return out
 
     def __len__(self):
-        if self.infer_files is not None:
+        if len(self.infer_files) != 0:
             return len(self.infer_files)
         else:
             return self.class_num

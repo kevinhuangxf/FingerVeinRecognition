@@ -11,6 +11,7 @@ class MRAADatamodule(pl.LightningDataModule):
     def __init__(self,
                  data_dir: str = 'data/',
                  infer_dir: str = '',
+                 sample_per_class = '',
                  train_batch_size: int = 2,
                  val_batch_size: int = 1,
                  test_batch_size: int = 1,
@@ -22,9 +23,9 @@ class MRAADatamodule(pl.LightningDataModule):
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
 
-        train_dataset = FVUSMFramesDataset(osp.join(data_dir, 'train'), mode='train')
-        val_dataset = FVUSMFramesDataset(osp.join(data_dir, 'test'), mode='test')
-        test_dataset = FVUSMFramesDataset(osp.join(data_dir, 'test'), mode='test', infer_dir=infer_dir)
+        train_dataset = FVUSMFramesDataset(osp.join(data_dir, 'train'), sample_per_class=sample_per_class, mode='train')
+        val_dataset = FVUSMFramesDataset(osp.join(data_dir, 'test'), sample_per_class=sample_per_class, mode='test')
+        test_dataset = FVUSMFramesDataset(osp.join(data_dir, 'test'), sample_per_class=sample_per_class, mode='test', infer_dir=infer_dir)
 
         self.data_train = train_dataset
         self.data_val = val_dataset
