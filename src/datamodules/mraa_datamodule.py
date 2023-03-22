@@ -23,9 +23,33 @@ class MRAADatamodule(pl.LightningDataModule):
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
 
-        train_dataset = FVUSMFramesDataset(osp.join(data_dir, 'train'), sample_per_class=sample_per_class, mode='train')
-        val_dataset = FVUSMFramesDataset(osp.join(data_dir, 'test'), sample_per_class=sample_per_class, mode='test')
-        test_dataset = FVUSMFramesDataset(osp.join(data_dir, 'test'), sample_per_class=sample_per_class, mode='test', infer_dir=infer_dir)
+        tfrms = transforms.Compose([
+            transforms.Resize((256, 256)),
+            transforms.PILToTensor(),
+            # transforms.ConvertImageDtype(torch.float),
+        ])
+
+        train_dataset = FVUSMFramesDataset(
+            osp.join(data_dir, 'train'),
+            tfrms,
+            sample_per_class, 
+            mode='train'
+        )
+
+        val_dataset = FVUSMFramesDataset(
+            osp.join(data_dir, 'test'), 
+            tfrms,
+            sample_per_class, 
+            mode='test'
+        )
+
+        test_dataset = FVUSMFramesDataset(
+            osp.join(data_dir, 'test'), 
+            tfrms,
+            sample_per_class, 
+            mode='test', 
+            infer_dir=infer_dir
+        )
 
         self.data_train = train_dataset
         self.data_val = val_dataset

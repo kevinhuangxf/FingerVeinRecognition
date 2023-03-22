@@ -59,8 +59,7 @@ class FVUSMFramesDataset(Dataset):
             
             out['source'] = source
             out['driving'] = driving
-
-        if self.mode == 'test':
+        elif self.mode == 'val':
             if len(self.infer_data) != 0:
                 # set source
                 source = self.infer_data[index]
@@ -77,6 +76,27 @@ class FVUSMFramesDataset(Dataset):
             frames = np.array(frames)
             frames = frames.transpose(0, 3, 1, 2) / 255.
             out['video'] = frames.astype(np.float32)
+        elif self.mode == 'test':
+            if len(self.infer_data) != 0:
+                # set source
+                source = self.infer_data[index]
+                out['source'] = (source.transpose(2, 0, 1) / 255.).astype(np.float32)
+                # random select id from img_data
+                index = random.choice(range(self.class_num))
+
+            num_videos = len(self.img_data) // self.sample_per_class
+
+            videos = []
+            for video_start_idx in [self.sample_per_class * i for i in list(range(num_videos))]:
+                frames = []
+                for img_idx in range(video_start_idx, video_start_idx + self.sample_per_class):
+                    image = self.img_data[img_idx]
+                    frames.append(image)
+                frames = np.array(frames)
+                frames = frames.transpose(0, 3, 1, 2) / 255.
+                videos.append(frames.astype(np.float32))
+
+            out['videos'] = videos
 
         return out
 

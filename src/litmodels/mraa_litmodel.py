@@ -203,43 +203,51 @@ class MRAALitModel(LightningModule):
         x = batch
 
         source = x['source']
-        predictions = []
         source_region_params = self.region_predictor(source)
-        for frame_idx in range(x['video'].shape[1]):
-            driving = x['video'][:, frame_idx]
-            driving_region_params = self.region_predictor(driving)
 
-            bg_params = self.bg_predictor(source, driving)
-            out = self.generator(source, source_region_params=source_region_params,
-                            driving_region_params=driving_region_params, bg_params=bg_params)
+        for i, video in enumerate(x['videos']):
 
-            out['source_region_params'] = source_region_params
-            out['driving_region_params'] = driving_region_params
-            predictions.append(out['prediction'])
+            predictions = []    
+            for frame_idx in range(video.shape[1]):
+                driving = video[:, frame_idx]
+                driving_region_params = self.region_predictor(driving)
 
-        t_pred = torch.cat(predictions, 0).unsqueeze(0)
-        vis = torch.cat((x['video'], t_pred), dim=3)
+                bg_params = self.bg_predictor(source, driving)
+                out = self.generator(source, source_region_params=source_region_params,
+                                driving_region_params=driving_region_params, bg_params=bg_params)
 
-        if isinstance(self.trainer.logger, TensorBoardLogger):
-            # self.trainer.logger.experiment.add_images(
-            #     "driving",
-            #     x['driving'], 
-            #     self.global_step
-            # )
-            self.trainer.logger.experiment.add_video(
-                'drivings / predictions', vis, batch_idx
-            )
-        elif isinstance(self.trainer.logger, WandbLogger):
-            # self.trainer.logger.log_image(
-            #     key="Images", 
-            #     images=[x['driving'], generated['prediction'], transformed_frame], 
-            #     caption=["driving", "prediction", "transformed_frame"]
-            # )
-            self.trainer.logger.experiment.log(
-                {"video": wandb.Video((vis[0].cpu().numpy() * 255).astype(np.uint8), fps=4, format="gif")}
-            )
+                out['source_region_params'] = source_region_params
+                out['driving_region_params'] = driving_region_params
+                predictions.append(out['prediction'])
 
-        return vis
+            t_pred = torch.cat(predictions, 0).unsqueeze(0)
+            T = len(predictions)
+            sources = torch.tile(source.unsqueeze(1), (1, T, 1, 1, 1))
+            vis = torch.cat((sources, video, t_pred), dim=4)
+
+            # save video to local storage
+            
+
+            if isinstance(self.trainer.logger, TensorBoardLogger):
+                # self.trainer.logger.experiment.add_images(
+                #     "driving",
+                #     x['driving'], 
+                #     self.global_step
+                # )
+                self.trainer.logger.experiment.add_video(
+                    'drivings / predictions', vis, i # batch_idx
+                )
+            elif isinstance(self.trainer.logger, WandbLogger):
+                # self.trainer.logger.log_image(
+                #     key="Images", 
+                #     images=[x['driving'], generated['prediction'], transformed_frame], 
+                #     caption=["driving", "prediction", "transformed_frame"]
+                # )
+                self.trainer.logger.experiment.log(
+                    {"video": wandb.Video((vis[0].cpu().numpy() * 255).astype(np.uint8), fps=4, format="gif")}
+                )
+
+        return None
 
     def configure_optimizers(self):
         optimizer = get_optimizer([
