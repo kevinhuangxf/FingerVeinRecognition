@@ -1,5 +1,6 @@
 import logging
 
+import torch
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
@@ -32,7 +33,18 @@ def main(cfg: DictConfig) -> None:
     trainer = hydra.utils.instantiate(cfg.trainer, callbacks=callbacks, logger=logger)
     log.info(f'Instantiated trainer: {trainer}')
 
-    trainer.fit(litmodel, datamodule)
+    # load pre-trained model
+    model_state_dict = None
+    if cfg.trainer.resume_from_checkpoint.endswith('.ckpt'):
+        model_state_dict = torch.load(
+            cfg.trainer.resume_from_checkpoint)['state_dict']
+    elif cfg.trainer.resume_from_checkpoint.endswith('.pth'):
+        model_state_dict = torch.load(cfg.trainer.resume_from_checkpoint,
+                                      map_location='cuda:0')
+    if model_state_dict is not None:
+        litmodel.load_state_dict(model_state_dict, strict=True)
+
+    trainer.test(litmodel, datamodule)
 
 
 if __name__ == '__main__':

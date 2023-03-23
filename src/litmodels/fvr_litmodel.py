@@ -10,7 +10,7 @@ from src.core.solvers.helper import get_lr_scheduler, get_optimizer
 
 class FVRLitModel(LightningModule):
 
-    def __init__(self, backbone, head, losses, optimizer, lr_scheduler):
+    def __init__(self, backbone, head, losses=None, optimizer=None, lr_scheduler=None):
         super().__init__()
         self.backbone = backbone
         self.head = head
