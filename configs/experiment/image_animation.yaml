@@ -1,0 +1,73 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+defaults:
+  - override /datamodule: base_datamodule.yaml
+  - override /litmodel: image_animation_litmodel.yaml
+  - override /callbacks: default.yaml
+  - override /trainer: gpu.yaml
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+datamodule:
+  train_batch_size: 2
+  val_batch_size: 1
+  test_batch_size: 1
+  num_workers: 2
+  pin_memory: False
+  datasets:
+    train: 
+      _target_: src.datasets.multi_frames_dataset.MultiFramesDataset
+      root: /media/user/Toshiba4T/Kevin/Development/FingerVeinRecognition/data/FVUSM_256x256_train_test/train
+      nframes: 6
+      mode: train
+      preload: False
+      infer_dir: ~
+      transforms:
+        _target_: torchvision.transforms.Compose
+        transforms:
+          - _target_: torchvision.transforms.Resize
+            size: [256, 256]
+          - _target_: torchvision.transforms.PILToTensor
+          - _target_: torchvision.transforms.ConvertImageDtype
+            dtype:
+              _target_: src.utils.helper.get_torch_dtype
+              dtype_name: float32
+          - _target_: torchvision.transforms.Normalize
+            mean: [0.5, 0.5, 0.5]
+            std: [0.5, 0.5, 0.5]
+    val:
+      _target_: src.datasets.multi_frames_dataset.MultiFramesDataset
+      root: /media/user/Toshiba4T/Kevin/Development/FingerVeinRecognition/data/FVUSM_256x256_train_test/test
+      nframes: 6
+      mode: test
+      preload: False
+      infer_dir: ~
+      transforms:
+        _target_: torchvision.transforms.Compose
+        transforms:
+          - _target_: torchvision.transforms.Resize
+            size: [256, 256]
+          - _target_: torchvision.transforms.PILToTensor
+          - _target_: torchvision.transforms.ConvertImageDtype
+            dtype:
+              _target_: src.utils.helper.get_torch_dtype
+              dtype_name: float32
+          - _target_: torchvision.transforms.Normalize
+            mean: [0.5, 0.5, 0.5]
+            std: [0.5, 0.5, 0.5]
+    test: ~
+
+trainer:
+  min_epochs: 100
+  max_epochs: 500 # num_repeats: 25
+  max_steps: -1
+  log_every_n_steps: 10
+  num_sanity_val_steps: 0
+
+  limit_train_batches: 1.0
+  limit_val_batches: 1.0
+  limit_test_batches: 0.0
