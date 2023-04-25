@@ -23,6 +23,7 @@ class FVUSMDataset(Dataset):
         self.class_num = len(self.files) // sample_per_class // 2  # why divide 2?
         self.labels = np.arange(self.class_num).repeat(sample_per_class)  # generate labels
         self.img_data = []
+        self.mode = mode
         if mode == 'train':
             # trainset from 0 - 2951
             for i in np.arange(0, len(self.files) // 2):
