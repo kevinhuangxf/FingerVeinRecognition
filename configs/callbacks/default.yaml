@@ -4,8 +4,9 @@ defaults:
 model_checkpoint:
   dirpath: ~  # ${paths.output_dir}/checkpoints
   filename: "epoch_{epoch:03d}"
-  monitor: "(train)loss"
-  mode: "max"
+  monitor: "(train)loss" # "(train)loss"
+  mode: "min"
+  save_top_k: 5
   save_last: True
   auto_insert_metric_name: False
   every_n_epochs: 1

@@ -17,8 +17,8 @@ class FVUSMFramesDataset(Dataset):
     """
 
     def __init__(self, root, transforms=[], sample_per_class=6, mode='train', infer_dir=''):
-        self.transform = transforms
-        self.files = sorted(list(Path(root).rglob("*.png")))
+        self.transforms = transforms
+        self.files = sorted(list(Path(root).rglob(f"*.*")))
         self.sample_per_class = sample_per_class
         self.class_num = len(self.files) // sample_per_class
         self.mode = mode
@@ -33,7 +33,7 @@ class FVUSMFramesDataset(Dataset):
         self.infer_data = []
         self.infer_files = []
         if infer_dir:
-            self.infer_files = sorted(list(Path(infer_dir).rglob("*.png")))
+            self.infer_files = sorted(list(Path(infer_dir).rglob("*.*")))
             for infer_file in self.infer_files:
                 img = cv2.imread(infer_file.as_posix())
                 img = cv2.resize(img, (256, 256))
@@ -77,12 +77,12 @@ class FVUSMFramesDataset(Dataset):
             frames = frames.transpose(0, 3, 1, 2) / 255.
             out['video'] = frames.astype(np.float32)
         elif self.mode == 'test':
-            if len(self.infer_data) != 0:
-                # set source
-                source = self.infer_data[index]
-                out['source'] = (source.transpose(2, 0, 1) / 255.).astype(np.float32)
-                # random select id from img_data
-                index = random.choice(range(self.class_num))
+            # if len(self.infer_data) != 0:
+            #     # set source
+            #     source = self.infer_data[index]
+            #     out['source'] = (source.transpose(2, 0, 1) / 255.).astype(np.float32)
+            #     # random select id from img_data
+            #     index = random.choice(range(self.class_num))
 
             num_videos = len(self.img_data) // self.sample_per_class
 
@@ -96,7 +96,7 @@ class FVUSMFramesDataset(Dataset):
                 frames = frames.transpose(0, 3, 1, 2) / 255.
                 videos.append(frames.astype(np.float32))
 
-            out['videos'] = videos
+            out['video'] = videos
 
         return out
 
