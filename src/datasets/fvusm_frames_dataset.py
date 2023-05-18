@@ -16,12 +16,13 @@ class FVUSMFramesDataset(Dataset):
 
     """
 
-    def __init__(self, root, transforms=[], sample_per_class=6, mode='train', infer_dir=''):
+    def __init__(self, root, transforms=[], sample_per_class=6, mode='train', infer_dir='', rotate_infer_sample=False):
         self.transforms = transforms
         self.files = sorted(list(Path(root).rglob(f"*.*")))
         self.sample_per_class = sample_per_class
         self.class_num = len(self.files) // sample_per_class
         self.mode = mode
+        self.rotate_infer_sample = rotate_infer_sample
 
         self.img_data = []
         for file_name in self.files:
@@ -37,6 +38,8 @@ class FVUSMFramesDataset(Dataset):
             for infer_file in self.infer_files:
                 img = cv2.imread(infer_file.as_posix())
                 img = cv2.resize(img, (256, 256))
+                if self.rotate_infer_sample:
+                    img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
                 self.infer_data.append(img)
 
     def __getitem__(self, index):
@@ -77,14 +80,13 @@ class FVUSMFramesDataset(Dataset):
             frames = frames.transpose(0, 3, 1, 2) / 255.
             out['video'] = frames.astype(np.float32)
         elif self.mode == 'test':
-            # if len(self.infer_data) != 0:
-            #     # set source
-            #     source = self.infer_data[index]
-            #     out['source'] = (source.transpose(2, 0, 1) / 255.).astype(np.float32)
-            #     # random select id from img_data
-            #     index = random.choice(range(self.class_num))
-
             num_videos = len(self.img_data) // self.sample_per_class
+
+            sources = []
+            if len(self.infer_data) != 0:
+                for source in self.infer_data:
+                    sources.append((source.transpose(2, 0, 1) / 255).astype(np.float32))
+            out['source'] = sources
 
             videos = []
             for video_start_idx in [self.sample_per_class * i for i in list(range(num_videos))]:
@@ -102,6 +104,8 @@ class FVUSMFramesDataset(Dataset):
 
     def __len__(self):
         if len(self.infer_files) != 0:
-            return len(self.infer_files)
+            # return len(self.infer_files)
+            # TODO: Think about this!
+            return 1
         else:
             return self.class_num

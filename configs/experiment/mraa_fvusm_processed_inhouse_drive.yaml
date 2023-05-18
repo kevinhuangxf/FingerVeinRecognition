@@ -1,0 +1,61 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+defaults:
+  - override /datamodule: base_datamodule.yaml
+  - override /litmodel: mraa_litmodel.yaml
+  - override /callbacks: default.yaml
+  - override /trainer: gpu.yaml
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+datamodule:
+  num_repeats: 50
+  train_batch_size: 16 # 256
+  val_batch_size: 1
+  test_batch_size: 1
+  num_workers: 4
+  pin_memory: False
+  datasets:
+    train: 
+      _target_: src.datasets.fvusm_frames_dataset.FVUSMFramesDataset
+      root: /media/user/Toshiba4T/Kevin/Data/FV-USM-processed-train-test/train
+      sample_per_class: 12
+      mode: train
+      transforms: ~
+    val:
+      _target_: src.datasets.fvusm_frames_dataset.FVUSMFramesDataset
+      root: /media/user/Toshiba4T/Kevin/Data/FV-USM-processed-train-test/test
+      sample_per_class: 12
+      mode: val
+      transforms: ~
+    test: 
+      _target_: src.datasets.fvusm_frames_dataset.FVUSMFramesDataset
+      # root: /media/user/Toshiba4T/Kevin/Data/FingerVeinVideoDB_Frames/test/021-L_middle-S1
+      root: /media/user/Toshiba4T/Kevin/Development/FingerVeinRecognition/data/inhouse_drive_021-L_middle-S1_first12/
+      sample_per_class: 12 # 40
+      mode: test
+      # infer_dir: /media/user/Toshiba4T/Kevin/Development/FingerVeinRecognition/data/sampleFV_test2/
+      infer_dir: /media/user/Toshiba4T/Kevin/Data/fv_samples_150ep_246
+      rotate_infer_sample: True
+      transforms: ~
+
+callbacks:
+  mraa_animation:
+    _target_: src.callbacks.mraa_animation_callback.MRAAAnimationCallback
+    method: relative
+    save_path: /media/user/Toshiba4T/Kevin/Development/FingerVeinRecognition/results/mraa_relative_fvusm_processed_inhouse_drive
+
+trainer:
+  min_epochs: 10
+  max_epochs: 100 # num_repeats: 25
+  max_steps: -1
+  log_every_n_steps: 10
+  num_sanity_val_steps: 0
+
+  limit_train_batches: 1.0
+  limit_val_batches: 0.1
+  limit_test_batches: 1.0
