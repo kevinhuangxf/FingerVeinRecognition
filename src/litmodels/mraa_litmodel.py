@@ -13,6 +13,45 @@ from src.networks.mraa.model import Transform, ImagePyramide, Vgg19
 from src.networks.mraa.avd_network import AVDNetwork
 
 
+import torch.nn as nn
+from src.networks.mraa import RegionPredictor, BGMotionPredictor, Generator
+
+
+class AnimationModel(nn.Module):
+
+    def __init__(self, region_predictor_kwargs, bg_predictor_kwargs, generator_kwargs):
+        super().__init__()
+        self.region_predictor = RegionPredictor(**region_predictor_kwargs)
+        self.bg_predictor = BGMotionPredictor(**bg_predictor_kwargs)
+        self.generator = Generator(**generator_kwargs)
+    
+    def forward(self, x):
+        source_region_params = self.region_predictor(x['source'])
+        driving_region_params = self.region_predictor(x['driving'])
+
+        bg_params = self.bg_predictor(x['source'], x['driving'])
+        generated = self.generator(x['source'], source_region_params=source_region_params,
+                                   driving_region_params=driving_region_params, bg_params=bg_params)
+        generated.update({'source_region_params': source_region_params, 'driving_region_params': driving_region_params})
+
+        return generated
+
+    def update_by_relative_motion(self, source_region_params, driving_region_params_initial, driving_region_params):
+        new_region_params = {k: v for k, v in driving_region_params.items()}
+        source_area = ConvexHull(source_region_params['shift'][0].data.cpu().numpy()).volume
+        driving_area = ConvexHull(driving_region_params_initial['shift'][0].data.cpu().numpy()).volume
+        movement_scale = np.sqrt(source_area) / np.sqrt(driving_area)
+
+        shift_diff = (driving_region_params['shift'] - driving_region_params_initial['shift'])
+        shift_diff *= movement_scale
+        new_region_params['shift'] = shift_diff + source_region_params['shift']
+
+        affine_diff = torch.matmul(driving_region_params['affine'],
+                                   torch.inverse(driving_region_params_initial['affine']))
+        new_region_params['affine'] = torch.matmul(affine_diff, source_region_params['affine'])
+        return new_region_params
+
+
 class MRAALitModel(LightningModule):
 
     def __init__(self, region_predictor, bg_predictor, generator, train_params, avd_params=None, pretrained_weights=None, losses=None, optimizer=None, lr_scheduler=None):

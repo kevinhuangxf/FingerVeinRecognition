@@ -40,11 +40,11 @@ class MRAADatamodule(pl.LightningDataModule):
             osp.join(data_dir, 'test'), 
             tfrms,
             sample_per_class, 
-            mode='test'
+            mode='val'
         )
 
         test_dataset = FVUSMFramesDataset(
-            osp.join(data_dir, 'test'), 
+            osp.join(data_dir, 'train'), # use train-set to animate 
             tfrms,
             sample_per_class, 
             mode='test', 

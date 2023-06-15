@@ -14,7 +14,10 @@ class FVRLitModel(LightningModule):
         super().__init__()
         self.backbone = backbone
         self.head = head
-        self.save_hyperparameters(ignore=['backbone', 'head'])
+        self.save_hyperparameters(ignore=['backbone', 'head'])\
+        
+        # evaluation metrics
+        self.metrics = None
 
     def forward(self, x):
         x = self.backbone(x)
@@ -119,7 +122,25 @@ class FVRLitModel(LightningModule):
         print(f'FRR@FAR=0.0001: {fpr10000 * 100}')
         print(f'Aver: {np.mean(metrics) * 100}')
 
+        if self.metrics is None:
+            self.metrics = metrics
+        # elif np.mean(metrics) * 100 < np.mean(self.metrics) * 100:
+        #     self.metrics = metrics
+        elif eer < self.metrics[0]:
+            self.metrics = metrics
+
         return metrics, metrics_thred
+
+    def on_train_end(self) -> None:
+        print("Best EER Results:")
+        
+        (eer, fpr100, fpr1000, fpr10000, fpr0) = self.metrics
+        print(f'EER: {eer * 100}')
+        print(f'FRR@FAR=0: {fpr0 * 100}')
+        print(f'FRR@FAR=0.01: {fpr100 * 100}')
+        print(f'FRR@FAR=0.001: {fpr1000 * 100}')
+        print(f'FRR@FAR=0.0001: {fpr10000 * 100}')
+        print(f'Aver: {np.mean(self.metrics) * 100}')
 
     def test_step(self, batch, batch_idx):
         data, labels = batch
