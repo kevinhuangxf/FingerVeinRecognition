@@ -1,8 +1,14 @@
+import cv2
+import random
 import numpy as np
+from copy import deepcopy
 from collections import OrderedDict
 from scipy.spatial import ConvexHull
+from sklearn.decomposition import PCA
+from tqdm import tqdm
 
 import torch
+import torch.nn as nn
 from pytorch_lightning import LightningModule
 from torchmetrics.functional import peak_signal_noise_ratio as psnr
 from torchmetrics.functional import structural_similarity_index_measure as ssim
@@ -11,10 +17,9 @@ from src.core.solvers.helper import get_lr_scheduler, get_optimizer
 from src.core.losses import PerceptualLoss
 from src.networks.mraa.model import Transform, ImagePyramide, Vgg19
 from src.networks.mraa.avd_network import AVDNetwork
-
-
-import torch.nn as nn
 from src.networks.mraa import RegionPredictor, BGMotionPredictor, Generator
+from src.networks.mraa.logger import Visualizer
+from src.utils.common import tensor2img, get_model_params
 
 
 class AnimationModel(nn.Module):
@@ -68,6 +73,15 @@ class MRAALitModel(LightningModule):
         self.pyramid = ImagePyramide(self.scales, 3)
         self.vgg = Vgg19()
 
+        self.driving_dict = {}
+
+        print('RegionPredictor params: ')
+        get_model_params(self.region_predictor.parameters())
+        print('BGMotionPredictor params: ')
+        get_model_params(self.bg_predictor.parameters())
+        print('Generator params: ')
+        get_model_params(self.generator.parameters())
+
         self.save_hyperparameters(ignore=['region_predictor', 'bg_predictor', 'generator'])
 
         if self.hparams.avd_params is not None:
@@ -92,9 +106,9 @@ class MRAALitModel(LightningModule):
         source_region_params = self.region_predictor(x['source'])
         driving_region_params = self.region_predictor(x['driving'])
 
-        bg_params = self.bg_predictor(x['source'], x['driving'])
+        # bg_params = self.bg_predictor(x['source'], x['driving'])
         generated = self.generator(x['source'], source_region_params=source_region_params,
-                                   driving_region_params=driving_region_params, bg_params=bg_params)
+                                   driving_region_params=driving_region_params, bg_params=None)
         generated.update({'source_region_params': source_region_params, 'driving_region_params': driving_region_params})
 
         loss_values = {}
@@ -223,9 +237,9 @@ class MRAALitModel(LightningModule):
 
         return results
     
-    def validation_epoch_end(self, outputs):
-        results = self.evaluation_step(outputs)
-        self.log_dict({'(val)' + k: v for k, v in results.items()})
+    # def validation_epoch_end(self, outputs):
+    #     results = self.evaluation_step(outputs)
+    #     self.log_dict({'(val)' + k: v for k, v in results.items()})
 
     def test_step(self, batch, batch_idx):
         print("Animation Callback!")
@@ -260,3 +274,82 @@ class MRAALitModel(LightningModule):
                                    torch.inverse(driving_region_params_initial['affine']))
         new_region_params['affine'] = torch.matmul(affine_diff, source_region_params['affine'])
         return new_region_params
+
+    def get_motion_list(self, videos):
+        for v_id, video in enumerate(videos):
+            self.driving_dict[f'{v_id}'] = []
+            for f_id in range(video.shape[1]):
+                driving = video[:, f_id]
+                driving_region_params = self.region_predictor(driving)
+                self.driving_dict[f'{v_id}'].append(driving_region_params)
+
+        shift_diff_list = []
+        for k, v in self.driving_dict.items():
+            for i in range(1, len(v)):
+                shift_diff_list.append((v[i]['shift'] - v[i-1]['shift']))
+        
+        return shift_diff_list
+
+    def get_principle_motion_vectors(self, shift_diff_list, n_components):
+        shift_data = torch.concat(shift_diff_list, dim=0)
+        shift_data = shift_data.view(shift_data.shape[0], -1)
+        shift_data = shift_data.cpu().numpy()
+
+        # PCA
+        pca = PCA(n_components=n_components)
+        shift_pca_data = pca.fit_transform(shift_data)
+
+        origin_shape = shift_diff_list[0].shape
+        motion_vectors = [torch.from_numpy(
+            motion_vector.reshape(origin_shape[-2:])[np.newaxis, ...].astype(np.float32)).cuda()
+            for motion_vector in pca.components_]
+
+        k_list = pca.explained_variance_ratio_ / sum(pca.explained_variance_ratio_)
+
+        return motion_vectors, k_list
+    
+    def get_random_motion_vector(self, k_list, motion_vectors):
+        # Generate random weights and make sure they sum to 1
+        weights = [random.random() for _ in range(10)]
+        weights_sum = sum(weights)
+        weights = [w / weights_sum for w in weights]
+
+        random_vector = 0
+        for w, k, vector in zip(weights, k_list, motion_vectors):
+            random_vector += w * k * vector
+
+        return random_vector
+
+    def infer_new_shift_param(self, source, shift_diff):
+
+        source_region_params = self.region_predictor(source)
+        driving_region_params = deepcopy(source_region_params)
+
+        visualizer = Visualizer(kp_size=source_region_params['shift'].shape[-2])
+        visualize_list = []
+
+        for i in range(-10, 11):
+
+            driving_region_params['shift'] = source_region_params['shift'] - shift_diff * i * 0.1
+
+            out = self.generator(source, source_region_params=source_region_params,
+                            driving_region_params=driving_region_params, bg_params=None)
+            out['source_region_params'] = source_region_params
+            out['driving_region_params'] = driving_region_params
+            images = visualizer.visualize(source, out)
+            visualize_list.append(images)
+        
+        return visualize_list
+
+    def infer_motion_vector(self, source, motion_vector):
+
+        source_region_params = self.region_predictor(source)
+        driving_region_params = deepcopy(source_region_params)
+        driving_region_params['shift'] = source_region_params['shift'] + motion_vector
+
+        out = self.generator(source, source_region_params=source_region_params,
+                        driving_region_params=driving_region_params, bg_params=None)
+        out['source_region_params'] = source_region_params
+        out['driving_region_params'] = driving_region_params
+
+        return out

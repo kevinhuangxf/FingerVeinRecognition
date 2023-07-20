@@ -24,12 +24,41 @@ class MRAAAnimationCallback(Callback):
 
     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
         print("Animate Video:")
-        self.animate_same_video(trainer)
+        self.animate_same_video(trainer, pl_module, batch, batch_idx)
     
     
     def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
         print("Animate Video:")
-        self.animate_random_video(trainer, pl_module, batch, batch_idx)
+        # self.animate_random_video(trainer, pl_module, batch, batch_idx)
+        self.infer_motion_vectors(trainer, pl_module, batch)
+
+    def infer_motion_vectors(self, trainer, pl_module, batch):
+        motion_list = pl_module.get_motion_list(batch['video'])
+
+        # motion_vectors, k_list = pl_module.get_principle_motion_vectors(motion_list, 10)
+        
+        sample_per_class = trainer.datamodule.hparams.datasets.test.sample_per_class
+        for i, source in enumerate(tqdm(batch['source'])):
+            for j in range(sample_per_class):
+                # use random principle motion vector
+                # random_vector = pl_module.get_random_motion_vector(motion_vectors, k_list)
+
+                # use random vector from motion list
+                random_vector = motion_list[random.choice(range(len(motion_list)))]
+
+                out = pl_module.infer_motion_vector(source, random_vector)
+                # images = visualizer.visualize(source, out)
+
+                pred_img = tensor2img(out['prediction'])
+                pred_img = cv2.resize(pred_img, (64, 144))
+                pred_img = cv2.rotate(pred_img, cv2.ROTATE_90_CLOCKWISE)
+
+                cv2.imwrite((self.save_path / f"{(i//4+1):0{3}d}_{i%12+1}_{(j+1):0{2}d}.png").as_posix(), pred_img)
+
+        # visualizer = Visualizer(kp_size=motion_vectors[0].shape[-2])
+        # visualized_list = self.infer_new_shift_param(batch['source'][0], motion_vectors[0])
+        # for i, viz in enumerate(visualized_list):
+        #     cv2.imwrite((f"viz_{i}.png"), viz)
 
     def animate_same_video(self, trainer, pl_module, batch, batch_idx):
         x = batch
