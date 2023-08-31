@@ -30,3 +30,34 @@ def tensor2img(tensor, out_type=np.uint8, min_max=(0, 1)):
         img_np = (img_np * 255.0).round()
 
     return img_np.astype(out_type)
+
+def get_model_params(parameters):
+    '''
+    Calculate the total params of a model
+    
+    Args:
+        parameters: model.parameters()
+    '''
+
+    # Count the total number of parameters
+    total_params = sum(p.numel() for p in parameters)
+
+    # Determine the appropriate metric prefix to use
+    if total_params >= 1e9:
+        prefix = "B"
+        divisor = 1e9
+    elif total_params >= 1e6:
+        prefix = "M"
+        divisor = 1e6
+    elif total_params >= 1e3:
+        prefix = "k"
+        divisor = 1e3
+    else:
+        prefix = ""
+        divisor = 1
+
+    # Convert the total number of parameters to the appropriate metric prefix
+    total_params /= divisor
+
+    # Print the result
+    print(f"Total parameters: {total_params:.1f} {prefix}")

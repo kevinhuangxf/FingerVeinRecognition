@@ -14,7 +14,7 @@ class FVRLitModel(LightningModule):
         super().__init__()
         self.backbone = backbone
         self.head = head
-        self.save_hyperparameters(ignore=['backbone', 'head'])\
+        self.save_hyperparameters(ignore=['backbone', 'head'])
         
         # evaluation metrics
         self.metrics = None
