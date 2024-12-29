@@ -1,17 +1,22 @@
 _target_: src.datamodules.MRAADatamodule
 
 # #FVUSM
-# data_dir: /media/user/Toshiba4T/Kevin/Development/FingerVeinRecognition/data/FVUSM_256x256_train_test # /media/user/Toshiba4T/Kevin/Data/FVUSM/FVUSM_256x256_gif
-# infer_dir: /media/user/Toshiba4T/Kevin/Development/FingerVeinRecognition/data/cherrypicks
+# data_dir: /media/user/Toshiba4T/Kevin/Development/FingerVeinRecognition/data/FVUSM_256x256_train_test
+# infer_dir: /media/user/Toshiba4T/Kevin/Development/FingerVeinRecognition/data/cherrypicks_single_test
 # sample_per_class: 6
 
-# #VideoDB
-data_dir: /media/user/Toshiba4T/Kevin/Data/FingerVeinVideoDB_Frames/
-infer_dir: ~
-sample_per_class: 40
+# #FVUSM processed
+data_dir: /media/user/Toshiba4T/Kevin/Data/FV-USM-processed-train-test
+infer_dir: /media/user/Toshiba4T/Kevin/Development/FingerVeinRecognition/data/cherrypicks_single_test
+sample_per_class: 12
 
-train_batch_size: 16
+# #VideoDB
+# data_dir: /media/user/Toshiba4T/Kevin/Data/FingerVeinVideoDB_Frames/
+# infer_dir: /media/user/Toshiba4T/Kevin/Development/FingerVeinRecognition/data/sampleFV_test/
+# sample_per_class: 40
+
+train_batch_size: 12
 val_batch_size: 1
 test_batch_size: 1
-num_workers: 8
+num_workers: 4
 pin_memory: False

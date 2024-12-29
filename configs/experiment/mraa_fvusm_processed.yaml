@@ -12,13 +12,19 @@ defaults:
 # all parameters below will be merged with parameters from default configurations set above
 # this allows you to overwrite only specified parameters
 
+callbacks:
+  mraa_animation:
+    _target_: src.callbacks.mraa_animation_callback.MRAAAnimationCallback
+    method: relative
+    save_path: /media/user/Toshiba4T/Kevin/Development/FingerVeinRecognition/results/mraa_relative_fvusm_processed
+
 trainer:
-  min_epochs: 100
-  max_epochs: 500 # num_repeats: 25
+  min_epochs: 10
+  max_epochs: 100 # num_repeats: 25
   max_steps: -1
   log_every_n_steps: 10
   num_sanity_val_steps: 0
 
   limit_train_batches: 1.0
-  limit_val_batches: 1.0
+  limit_val_batches: 0.1
   limit_test_batches: 1.0

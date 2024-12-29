@@ -8,6 +8,7 @@ from src.datasets.fvusm_dataset import BalancedBatchSampler, FVUSMDataset
 class FVRDatamodule(pl.LightningDataModule):
 
     def __init__(self,
+                 animation_transform = None,
                  data_dir: str = 'data/',
                  train_batch_size: int = 2,
                  train_batch_sampler_n_classes: int = 8,
@@ -20,7 +21,7 @@ class FVRDatamodule(pl.LightningDataModule):
 
         # this line allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
-        self.save_hyperparameters(logger=False)
+        self.save_hyperparameters(ignore=['animation_transform'], logger=False)
 
         # trfms
         normalize = transforms.Normalize(
@@ -30,6 +31,8 @@ class FVRDatamodule(pl.LightningDataModule):
                 0.5,
             ])
         transform_train = []
+        if animation_transform is not None:
+            transform_train.append(animation_transform)
         transform_train.append(
             transforms.RandomResizedCrop(size=(64, 144), scale=(0.5, 1.0), ratio=(2.25, 2.25)))
         transform_train.append(transforms.RandomRotation(degrees=3))

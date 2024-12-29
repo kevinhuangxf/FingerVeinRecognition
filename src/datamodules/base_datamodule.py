@@ -1,17 +1,29 @@
-import os.path as osp
 import pytorch_lightning as pl
-from torch.utils.data import DataLoader
-from torchvision import transforms
-
-from src.datasets.fvusm_frames_dataset import FVUSMFramesDataset
+from torch.utils.data import DataLoader, Dataset
 
 
-class MRAADatamodule(pl.LightningDataModule):
+class DatasetRepeater(Dataset):
+    """
+    Pass several times over the same dataset for better i/o performance
+    """
+
+    def __init__(self, dataset, num_repeats=100):
+        self.dataset = dataset
+        self.num_repeats = num_repeats
+
+    def __len__(self):
+        return self.num_repeats * self.dataset.__len__()
+
+    def __getitem__(self, idx):
+        return self.dataset[idx % self.dataset.__len__()]
+
+
+class BaseDatamodule(pl.LightningDataModule):
 
     def __init__(self,
-                 data_dir: str = 'data/',
-                 infer_dir: str = '',
-                 sample_per_class = '',
+                 datasets,
+                 transforms=None,
+                 num_repeats=1,
                  train_batch_size: int = 2,
                  val_batch_size: int = 1,
                  test_batch_size: int = 1,
@@ -23,37 +35,17 @@ class MRAADatamodule(pl.LightningDataModule):
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
 
-        tfrms = transforms.Compose([
-            transforms.Resize((256, 256)),
-            transforms.PILToTensor(),
-            # transforms.ConvertImageDtype(torch.float),
-        ])
+        if transforms is not None:
+            datasets['train'].transforms = transforms['train']
+            datasets['val'].transforms = transforms['val']
+            datasets['test'].transforms = transforms['test']
 
-        train_dataset = FVUSMFramesDataset(
-            osp.join(data_dir, 'train'),
-            tfrms,
-            sample_per_class, 
-            mode='train'
-        )
-
-        val_dataset = FVUSMFramesDataset(
-            osp.join(data_dir, 'test'), 
-            tfrms,
-            sample_per_class, 
-            mode='val'
-        )
-
-        test_dataset = FVUSMFramesDataset(
-            osp.join(data_dir, 'train'), # use train-set to animate 
-            tfrms,
-            sample_per_class, 
-            mode='test', 
-            infer_dir=infer_dir
-        )
-
-        self.data_train = train_dataset
-        self.data_val = val_dataset
-        self.data_test = test_dataset
+        if num_repeats > 1:
+            self.data_train = DatasetRepeater(datasets['train'], num_repeats)
+        else:
+            self.data_train = datasets['train']
+        self.data_val = datasets['val']
+        self.data_test = datasets['test']
 
     def train_dataloader(self):
         return DataLoader(

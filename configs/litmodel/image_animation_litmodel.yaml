@@ -1,0 +1,17 @@
+_target_: src.litmodels.ImageAnimationLitModel
+
+# # TODO: Add losses from yaml
+# losses:
+#   perceptual_loss:
+#     _target_: src.core.losses.PerceptualLoss
+
+optimizer:
+  type: Adam
+  lr: !!float 2e-4
+  weight_decay: 0.0
+  betas: [0.9, 0.99]
+
+lr_scheduler:
+  type: MultiStepLR
+  milestones: [60, 90]
+  gamma: 0.1

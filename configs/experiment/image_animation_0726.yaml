@@ -1,0 +1,146 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+defaults:
+  - override /datamodule: base_datamodule.yaml
+  - override /litmodel: image_animation_litmodel.yaml
+  - override /callbacks: default.yaml
+  - override /trainer: gpu.yaml
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+litmodel:
+  animation_model:
+    _target_: src.networks.image_animation.animation_model.AnimationModel
+    
+    region_predictor_kwargs:
+      # _target_: src.networks.mraa.RegionPredictor
+      num_regions: 1
+      num_channels: 1
+      estimate_affine: True
+      temperature: 0.1
+      block_expansion: 8
+      max_features: 64
+      scale_factor: 0.5
+      num_blocks: 3
+      pca_based: True
+      pad: 0
+      fast_svd: False
+
+    generator_kwargs: 
+      # _target_: src.networks.mraa.Generator
+      num_regions: 1
+      num_channels: 1
+      block_expansion: 8
+      max_features: 64
+      num_down_blocks: 3
+      num_bottleneck_blocks: 1
+      skips: True
+      revert_axis_swap: True
+      pixelwise_flow_predictor_params:
+        block_expansion: 8
+        max_features: 64
+        num_blocks: 3
+        scale_factor: 0.5
+        use_deformed_source: True
+        use_covar_heatmap: True
+        estimate_occlusion_map: True
+
+  train_params:
+    scales: [1, 0.5, 0.25]
+    transform_params: 
+      sigma_affine: 0.05
+      sigma_tps: 0.005
+      points_tps: 5
+    loss_weights:
+      perceptual: [10, 10, 10, 10, 10]
+      equivariance_shift: 10
+      equivariance_affine: 10
+
+  optimizer:
+    type: Adam
+    lr: !!float 2e-4
+    weight_decay: 0.0
+    betas: [0.9, 0.99]
+
+  lr_scheduler:
+    type: MultiStepLR
+    milestones: [60, 90]
+    gamma: 0.1
+
+
+datamodule:
+  num_repeats: 10
+  train_batch_size: 24
+  val_batch_size: 1
+  test_batch_size: 1
+  num_workers: 2
+  pin_memory: False
+  datasets:
+    train: 
+      _target_: src.datasets.image_animation_dataset.ImageAnimationDataset
+      root: /media/user/Toshiba4T/Kevin/Data/FV-USM-processed-train-test/train
+      sample_per_class: 6
+      mode: train
+      img_size: [144, 64]
+      img_mode: L
+      transforms:
+        _target_: torchvision.transforms.Compose
+        transforms:
+          - _target_: torchvision.transforms.ToTensor
+          - _target_: torchvision.transforms.Normalize
+            mean: [0.]
+            std: [1.]
+    val:
+      _target_: src.datasets.image_animation_dataset.ImageAnimationDataset
+      root: /media/user/Toshiba4T/Kevin/Data/FV-USM-processed-train-test/test
+      sample_per_class: 6
+      mode: val
+      img_size: [144, 64]
+      img_mode: L
+      transforms:
+        _target_: torchvision.transforms.Compose
+        transforms:
+          - _target_: torchvision.transforms.ToTensor
+          - _target_: torchvision.transforms.Normalize
+            mean: [0.]
+            std: [1.]
+    test: 
+      _target_: src.datasets.image_animation_dataset.ImageAnimationDataset
+      root: /media/user/Toshiba4T/Kevin/Data/FV-USM-processed-train-test/test
+      sample_per_class: 6
+      mode: test
+      img_size: [144, 64]
+      img_mode: L
+      infer_dir: /media/user/Toshiba4T/Kevin/Data/fv_samples_150ep_246
+      rotate_infer_sample: False
+      rotate_root_sample: False
+      transforms: 
+        _target_: torchvision.transforms.Compose
+        transforms:
+          - _target_: torchvision.transforms.ToTensor
+          - _target_: torchvision.transforms.Normalize
+            mean: [0.]
+            std: [1.]
+
+callbacks:
+  mraa_animation:
+    _target_: src.callbacks.mraa_animation_callback.MRAAAnimationCallback
+    method: relative
+    save_path: /media/user/Toshiba4T/Kevin/Development/FingerVeinRecognition/results/0726_02
+
+trainer:
+  min_epochs: 100
+  max_epochs: 100 # num_repeats: 25
+  max_steps: -1
+  log_every_n_steps: 10
+  num_sanity_val_steps: 0
+
+  limit_train_batches: 1.0
+  limit_val_batches: 10
+  limit_test_batches: 1.0
+
+  resume_from_checkpoint: /media/user/Toshiba4T/Kevin/Development/FingerVeinRecognition/lightning_logs/experiment/version_736/checkpoints/epoch_066.ckpt

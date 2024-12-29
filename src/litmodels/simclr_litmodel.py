@@ -1,6 +1,8 @@
 from itertools import combinations
 
+import torch
 import numpy as np
+import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 from sklearn import preprocessing
 from sklearn.metrics import roc_curve
@@ -8,38 +10,68 @@ from sklearn.metrics import roc_curve
 from src.core.solvers.helper import get_lr_scheduler, get_optimizer
 
 
-class FVRLitModel(LightningModule):
+class SimCLRLitModel(LightningModule):
 
-    def __init__(self, backbone, head, losses=None, optimizer=None, lr_scheduler=None):
+    def __init__(self, backbone, head, temperature=0.05, losses=None, optimizer=None, lr_scheduler=None):
         super().__init__()
         self.backbone = backbone
         self.head = head
         self.save_hyperparameters(ignore=['backbone', 'head'])
-        
-        # evaluation metrics
-        self.metrics = None
 
     def forward(self, x):
         x = self.backbone(x)
         out = self.head(x)
         return out
 
-    def training_step(self, batch, batch_idx):
-        # network step
-        data, labels = batch
-        features = self.backbone(data)
-        head_features, outputs = self.head(features)
-        # calc losses
-        loss_dict = dict(
-            loss_triplet=self.hparams.losses.tripletloss(head_features, labels)[0],
-            loss_cosface=self.hparams.losses.cosface(outputs, labels),
-        )
-        loss_dict['loss'] = sum([v for k, v in loss_dict.items()])
+    def info_nce_loss(self, batch, mode="train"):
+        imgs, _ = batch
+        imgs = torch.cat(imgs, dim=0)
 
-        return loss_dict
+        (view_1, view_2), labels = batch
+        features_1 = self.backbone(view_1)
+        features_2 = self.backbone(view_2)
+        head_features_1, outputs_1 = self.head(features_1)
+        head_features_2, outputs_2 = self.head(features_2)
+
+        feats = torch.cat([head_features_1, head_features_2], dim=0)
+
+        # Encode all images
+        # feats = self.convnet(imgs)
+        # Calculate cosine similarity
+        cos_sim = F.cosine_similarity(feats[:, None, :], feats[None, :, :], dim=-1)
+        # Mask out cosine similarity to itself
+        self_mask = torch.eye(cos_sim.shape[0], dtype=torch.bool, device=cos_sim.device)
+        cos_sim.masked_fill_(self_mask, -9e15)
+        # Find positive example -> batch_size//2 away from the original example
+        pos_mask = self_mask.roll(shifts=cos_sim.shape[0] // 2, dims=0)
+        # InfoNCE loss
+        cos_sim = cos_sim / self.hparams.temperature
+        nll = -cos_sim[pos_mask] + torch.logsumexp(cos_sim, dim=-1)
+        nll = nll.mean()
+
+        # Logging loss
+        self.log(mode + "_loss", nll)
+        # Get ranking position of positive example
+        comb_sim = torch.cat(
+            [cos_sim[pos_mask][:, None], cos_sim.masked_fill(pos_mask, -9e15)],  # First position positive example
+            dim=-1,
+        )
+        sim_argsort = comb_sim.argsort(dim=-1, descending=True).argmin(dim=-1)
+        # Logging ranking metrics
+        self.log(mode + "_acc_top1", (sim_argsort == 0).float().mean())
+        self.log(mode + "_acc_top5", (sim_argsort < 5).float().mean())
+        self.log(mode + "_acc_mean_pos", 1 + sim_argsort.float().mean())
+
+        return nll
+
+    def training_step(self, batch, batch_idx):
+        return self.info_nce_loss(batch, mode="train")
 
     def on_validation_start(self):
         self.val_class_num = self.trainer.datamodule.data_val.class_num
+
+    # def validation_step(self, batch, batch_idx):
+    #     self.info_nce_loss(batch, mode="val")
 
     def validation_step(self, batch, batch_idx):
         # network step
@@ -54,6 +86,7 @@ class FVRLitModel(LightningModule):
         return head_features, labels
 
     def validation_epoch_end(self, outputs):
+
         embeddings = [output[0] for output in outputs]
         targets = [output[1] for output in outputs]
         embeddings = np.vstack(embeddings)
@@ -122,25 +155,7 @@ class FVRLitModel(LightningModule):
         print(f'FRR@FAR=0.0001: {fpr10000 * 100}')
         print(f'Aver: {np.mean(metrics) * 100}')
 
-        if self.metrics is None:
-            self.metrics = metrics
-        # elif np.mean(metrics) * 100 < np.mean(self.metrics) * 100:
-        #     self.metrics = metrics
-        elif eer < self.metrics[0]:
-            self.metrics = metrics
-
         return metrics, metrics_thred
-
-    def on_train_end(self) -> None:
-        print("Best EER Results:")
-        
-        (eer, fpr100, fpr1000, fpr10000, fpr0) = self.metrics
-        print(f'EER: {eer * 100}')
-        print(f'FRR@FAR=0: {fpr0 * 100}')
-        print(f'FRR@FAR=0.01: {fpr100 * 100}')
-        print(f'FRR@FAR=0.001: {fpr1000 * 100}')
-        print(f'FRR@FAR=0.0001: {fpr10000 * 100}')
-        print(f'Aver: {np.mean(self.metrics) * 100}')
 
     def test_step(self, batch, batch_idx):
         data, labels = batch
