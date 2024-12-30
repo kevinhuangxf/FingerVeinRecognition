@@ -108,18 +108,17 @@ logger: # for logging settings
 To start training:
 
 ```shell
+# train the fusion_aug baseline
 python train.py experiment=fusion_aug.yaml
+# train our image animation model on fvusm dataset
+python train.py experiment=image_animation_0726_fvusm.yaml
 ```
-
-## Results
-
-Comparison of quantitative results (with all settings the same):
-
-|  Repo  | EER | FPR100  |  FPR1000  |  FPR10000 | FPR0 | Aver |
-|:----:|:----:|:----:|:----:|:----:|:----:|:----:|
-| FusionAug | 0.35% | 0.14% | 0.94% | 3.34% | 7.23% | 2.40% |
-| This repo | 0.46% | 0.21% | 1.55% | 5.22% | 6.20% | 2.73% |
 
 ## Citation
 
-[1] Ou Weifeng, Po Laiman, Zhou Chang, Rehman Yasar Abbas Ur, Xian Pengfei, Zhang Yujia. Fusion Loss and Inter-class Data Augmentation for Deep Finger Vein Feature Learning [J]. Expert Systems with Applications, 2021, 171(7):114584. https://doi.org/10.1016/j.eswa.2021.114584.
+@article{huang2024motion,
+  title     = {Motion Transfer-Driven Intra-Class Data Augmentation for Finger Vein Recognition},
+  author    = {Xiu-Feng Huang, Lai-Man Po, Wei-Feng Ou},
+  journal   = {International Conference on Acoustics, Speech and Signal Processing (ICASSP)},
+  year      = {2024},
+}
