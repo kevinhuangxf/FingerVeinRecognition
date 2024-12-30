@@ -116,9 +116,11 @@ python train.py experiment=image_animation_0726_fvusm.yaml
 
 ## Citation
 
+```
 @article{huang2024motion,
   title     = {Motion Transfer-Driven Intra-Class Data Augmentation for Finger Vein Recognition},
   author    = {Xiu-Feng Huang, Lai-Man Po, Wei-Feng Ou},
   journal   = {International Conference on Acoustics, Speech and Signal Processing (ICASSP)},
   year      = {2024},
 }
+```
